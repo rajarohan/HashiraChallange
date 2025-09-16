@@ -46,6 +46,8 @@
             text-align: center;
             margin: 10px 0;
             font-family: 'Courier New', monospace;
+            word-break: break-all;
+            overflow-wrap: break-word;
         }
         .details {
             font-size: 14px;
@@ -59,6 +61,8 @@
             margin: 10px 0;
             font-family: 'Courier New', monospace;
             font-size: 12px;
+            word-break: break-all;
+            overflow-wrap: break-word;
         }
         .loading {
             text-align: center;
@@ -114,7 +118,6 @@
     </div>
 
     <script>
-        // Embedded JSON data (for standalone operation)
         const data1 = {
             "keys": {
                 "n": 4,
@@ -185,25 +188,67 @@
             }
         };
 
+        function formatLargeNumber(num) {
+            const numStr = num.toString();
+            if (numStr.length <= 15) {
+                return parseInt(numStr).toLocaleString();
+            }
+            return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        }
+
         function baseToDecimal(value, base) {
+            if (value.length > 15 || base > 10) {
+                try {
+                    return BigInt(parseInt(value, base)).toString();
+                } catch (e) {
+                    return baseToDecimalManual(value, base);
+                }
+            }
             return parseInt(value, base);
         }
 
-        function lagrangeInterpolation(points, x) {
-            let result = 0;
-            const n = points.length;
+        function baseToDecimalManual(value, base) {
+            let result = 0n;
+            const baseBigInt = BigInt(base);
             
-            for (let i = 0; i < n; i++) {
-                let term = points[i].y;
-                for (let j = 0; j < n; j++) {
-                    if (i !== j) {
-                        term = term * (x - points[j].x) / (points[i].x - points[j].x);
-                    }
+            for (let i = 0; i < value.length; i++) {
+                const digit = value[i].toLowerCase();
+                let digitValue;
+                
+                if (digit >= '0' && digit <= '9') {
+                    digitValue = BigInt(digit);
+                } else {
+                    digitValue = BigInt(digit.charCodeAt(0) - 'a'.charCodeAt(0) + 10);
                 }
-                result += term;
+                
+                result = result * baseBigInt + digitValue;
             }
             
-            return Math.round(result);
+            return result.toString();
+        }
+
+        function lagrangeInterpolation(points, x) {
+            let result = 0n;
+            const n = points.length;
+            const xBigInt = BigInt(x);
+            
+            for (let i = 0; i < n; i++) {
+                let numerator = BigInt(points[i].y);
+                let denominator = 1n;
+                
+                for (let j = 0; j < n; j++) {
+                    if (i !== j) {
+                        numerator = numerator * (xBigInt - BigInt(points[j].x));
+                        denominator = denominator * (BigInt(points[i].x) - BigInt(points[j].x));
+                    }
+                }
+                
+                if (denominator !== 0n) {
+                    result = result + numerator / denominator;
+                }
+            }
+            
+            return result.toString();
         }
 
         function processJsonData(data, datasetName) {
@@ -253,33 +298,34 @@
                 const result1 = processJsonData(data1, "data1.json");
                 const result2 = processJsonData(data2, "data2.json");
                 
-                // Clear previous results
                 document.getElementById('results').innerHTML = `
                     <div class="result-section" id="data1-results">
                         <div class="result-title">Data Set 1 (data1.json)</div>
-                        <div class="c-value" id="c-value-1">c = ${result1.constantTerm}</div>
+                        <div class="c-value" id="c-value-1">c = ${formatLargeNumber(result1.constantTerm)}</div>
                         <div class="details" id="details-1">
                             <strong>Polynomial degree:</strong> ${result1.keys.k - 1}<br>
                             <strong>Points used:</strong> ${result1.keys.k} out of ${result1.keys.n}<br>
-                            <strong>Secret reconstructed at x=0</strong>
+                            <strong>Secret reconstructed at x=0</strong><br>
+                            <strong>Exact value:</strong> ${result1.constantTerm}
                         </div>
                         <div class="data-points" id="points-1">
                             <strong>Points used for reconstruction:</strong><br>
-                            ${result1.points.map(p => `(${p.x}, ${p.y})`).join('<br>')}
+                            ${result1.points.map(p => `(${p.x}, ${formatLargeNumber(p.y)})`).join('<br>')}
                         </div>
                     </div>
                     
                     <div class="result-section" id="data2-results">
                         <div class="result-title">Data Set 2 (data2.json)</div>
-                        <div class="c-value" id="c-value-2">c = ${result2.constantTerm}</div>
+                        <div class="c-value" id="c-value-2">c = ${formatLargeNumber(result2.constantTerm)}</div>
                         <div class="details" id="details-2">
                             <strong>Polynomial degree:</strong> ${result2.keys.k - 1}<br>
                             <strong>Points used:</strong> ${result2.keys.k} out of ${result2.keys.n}<br>
-                            <strong>Secret reconstructed at x=0</strong>
+                            <strong>Secret reconstructed at x=0</strong><br>
+                            <strong>Exact value:</strong> ${result2.constantTerm}
                         </div>
                         <div class="data-points" id="points-2">
                             <strong>Points used for reconstruction:</strong><br>
-                            ${result2.points.map(p => `(${p.x}, ${p.y})`).join('<br>')}
+                            ${result2.points.map(p => `(${p.x}, ${formatLargeNumber(p.y)})`).join('<br>')}
                         </div>
                     </div>
                 `;
