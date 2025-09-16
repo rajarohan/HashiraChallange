@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polynomial Secret Reconstruction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .result-section {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            border-radius: 5px;
+        }
+        .result-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .c-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+            background-color: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .data-points {
+            background-color: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Polynomial Secret Reconstruction</h1>
+        <p class="loading" id="loading">Loading and processing data...</p>
+        
+        <button onclick="processData()" id="processBtn">Reload Data</button>
+        
+        <div id="error-message" class="error" style="display: none;"></div>
+        
+        <div id="results" style="display: none;">
+            <div class="result-section" id="data1-results">
+                <div class="result-title">Data Set 1 (data1.json)</div>
+                <div class="c-value" id="c-value-1">c = </div>
+                <div class="details" id="details-1"></div>
+                <div class="data-points" id="points-1"></div>
+            </div>
+            
+            <div class="result-section" id="data2-results">
+                <div class="result-title">Data Set 2 (data2.json)</div>
+                <div class="c-value" id="c-value-2">c = </div>
+                <div class="details" id="details-2"></div>
+                <div class="data-points" id="points-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let data1 = null;
+        let data2 = null;
+        async function loadJsonFiles() {
+            try {
+                const [response1, response2] = await Promise.all([
+                    fetch('./data1.json'),
+                    fetch('./data2.json')
+                ]);
+                
+                if (!response1.ok) {
+                    throw new Error(`Failed to load data1.json: ${response1.statusText}`);
+                }
+                if (!response2.ok) {
+                    throw new Error(`Failed to load data2.json: ${response2.statusText}`);
+                }
+                
+                data1 = await response1.json();
+                data2 = await response2.json();
+                
+                console.log('JSON files loaded successfully');
+                return true;
+            } catch (error) {
+                console.error('Error loading JSON files:', error);
+                showError(`Error loading JSON files: ${error.message}`);
+                return false;
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function baseToDecimal(value, base) {
+            return parseInt(value, base);
+        }
+
+        function lagrangeInterpolation(points, x) {
+            let result = 0;
+            const n = points.length;
+            
+            for (let i = 0; i < n; i++) {
+                let term = points[i].y;
+                for (let j = 0; j < n; j++) {
+                    if (i !== j) {
+                        term = term * (x - points[j].x) / (points[i].x - points[j].x);
+                    }
+                }
+                result += term;
+            }
+            
+            return Math.round(result);
+        }
+
+        function processJsonData(data, datasetName) {
+            console.log(`Processing ${datasetName}:`);
+            
+            const results = [];
+            
+            Object.keys(data).forEach(key => {
+                if (key !== 'keys' && data[key].base && data[key].value) {
+                    const base = parseInt(data[key].base);
+                    const value = data[key].value;
+                    const decimal = baseToDecimal(value, base);
+                    
+                    console.log(`${key}: ${value} (base ${base}) = ${decimal} (decimal)`);
+                    
+                    results.push({
+                        id: parseInt(key),
+                        originalBase: base,
+                        originalValue: value,
+                        decimalValue: decimal
+                    });
+                }
+            });
+            
+            results.sort((a, b) => a.id - b.id);
+            
+            const points = results.slice(0, data.keys.k).map(r => ({
+                x: r.id,
+                y: r.decimalValue
+            }));
+            
+            const c = lagrangeInterpolation(points, 0);
+            
+            return {
+                keys: data.keys,
+                results: results,
+                points: points,
+                constantTerm: c
+            };
+        }
+
+        async function displayResults() {
+            document.getElementById('error-message').style.display = 'none';
+            
+            if (!data1 || !data2) {
+                document.getElementById('loading').textContent = 'Loading JSON files...';
+                const loaded = await loadJsonFiles();
+                if (!loaded) {
+                    return;
+                }
+            }
+            
+            document.getElementById('loading').textContent = 'Processing data...';
+            
+            try {
+                const result1 = processJsonData(data1, "data1.json");
+                const result2 = processJsonData(data2, "data2.json");
+                
+                // Clear previous results
+                document.getElementById('results').innerHTML = `
+                    <div class="result-section" id="data1-results">
+                        <div class="result-title">Data Set 1 (data1.json)</div>
+                        <div class="c-value" id="c-value-1">c = ${result1.constantTerm}</div>
+                        <div class="details" id="details-1">
+                            <strong>Polynomial degree:</strong> ${result1.keys.k - 1}<br>
+                            <strong>Points used:</strong> ${result1.keys.k} out of ${result1.keys.n}<br>
+                            <strong>Secret reconstructed at x=0</strong>
+                        </div>
+                        <div class="data-points" id="points-1">
+                            <strong>Points used for reconstruction:</strong><br>
+                            ${result1.points.map(p => `(${p.x}, ${p.y})`).join('<br>')}
+                        </div>
+                    </div>
+                    
+                    <div class="result-section" id="data2-results">
+                        <div class="result-title">Data Set 2 (data2.json)</div>
+                        <div class="c-value" id="c-value-2">c = ${result2.constantTerm}</div>
+                        <div class="details" id="details-2">
+                            <strong>Polynomial degree:</strong> ${result2.keys.k - 1}<br>
+                            <strong>Points used:</strong> ${result2.keys.k} out of ${result2.keys.n}<br>
+                            <strong>Secret reconstructed at x=0</strong>
+                        </div>
+                        <div class="data-points" id="points-2">
+                            <strong>Points used for reconstruction:</strong><br>
+                            ${result2.points.map(p => `(${p.x}, ${p.y})`).join('<br>')}
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').style.display = 'block';
+                
+                console.log('Results displayed successfully!');
+                console.log('Data 1 - c value:', result1.constantTerm);
+                console.log('Data 2 - c value:', result2.constantTerm);
+                
+            } catch (error) {
+                console.error('Error processing data:', error);
+                showError(`Error processing data: ${error.message}`);
+            }
+        }
+
+        async function processData() {
+            data1 = null;
+            data2 = null;
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            await displayResults();
+        }
+
+        window.onload = function() {
+            setTimeout(async () => {
+                await displayResults();
+            }, 500);
+        };
+    </script>
+</body>
+</html>
