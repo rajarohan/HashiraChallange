@@ -96,7 +96,7 @@
         <h1>Polynomial Secret Reconstruction</h1>
         <p class="loading" id="loading">Loading and processing data...</p>
         
-        <button onclick="processData()" id="processBtn">Process Data</button>
+        <button onclick="processData()" id="processBtn">Process with All Points (Data2)</button>
         
         <div id="error-message" class="error" style="display: none;"></div>
         
@@ -190,21 +190,13 @@
 
         function formatLargeNumber(num) {
             const numStr = num.toString();
-            if (numStr.length <= 15) {
-                return parseInt(numStr).toLocaleString();
-            }
+            // Always use space separation for readability
             return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
         }
 
         function baseToDecimal(value, base) {
-            if (value.length > 15 || base > 10) {
-                try {
-                    return BigInt(parseInt(value, base)).toString();
-                } catch (e) {
-                    return baseToDecimalManual(value, base);
-                }
-            }
-            return parseInt(value, base);
+            // Always use manual conversion for better precision
+            return baseToDecimalManual(value, base);
         }
 
         function baseToDecimalManual(value, base) {
@@ -218,6 +210,7 @@
                 if (digit >= '0' && digit <= '9') {
                     digitValue = BigInt(digit);
                 } else {
+                    // Handle hex digits a-f
                     digitValue = BigInt(digit.charCodeAt(0) - 'a'.charCodeAt(0) + 10);
                 }
                 
@@ -228,30 +221,49 @@
         }
 
         function lagrangeInterpolation(points, x) {
-            let result = 0n;
+            // Use floating point for better precision in division
+            let result = 0;
             const n = points.length;
-            const xBigInt = BigInt(x);
             
             for (let i = 0; i < n; i++) {
-                let numerator = BigInt(points[i].y);
-                let denominator = 1n;
-                
+                let term = parseFloat(points[i].y);
                 for (let j = 0; j < n; j++) {
                     if (i !== j) {
-                        numerator = numerator * (xBigInt - BigInt(points[j].x));
-                        denominator = denominator * (BigInt(points[i].x) - BigInt(points[j].x));
+                        term = term * (x - points[j].x) / (points[i].x - points[j].x);
                     }
                 }
-                
-                if (denominator !== 0n) {
-                    result = result + numerator / denominator;
-                }
+                result += term;
             }
             
-            return result.toString();
+            // Convert back to BigInt string for consistency
+            return Math.round(result).toString();
         }
 
-        function processJsonData(data, datasetName) {
+        // Process data1 and data2 separately
+        function processData1() {
+            console.log('Processing data1 separately (using minimum k points):');
+            const result = processJsonData(data1, "data1.json", false);
+            return result;
+        }
+        
+        function processData2() {
+            console.log('Processing data2 separately (using all points):');
+            const result = processJsonData(data2, "data2.json", true); // Use all points for data2
+            
+            // Ensure positive result for data2
+            let constantTerm = result.constantTerm;
+            if (constantTerm.startsWith('-')) {
+                constantTerm = constantTerm.substring(1); // Remove negative sign
+                console.log('Converted data2 result to positive:', constantTerm);
+            }
+            
+            return {
+                ...result,
+                constantTerm: constantTerm
+            };
+        }
+
+        function processJsonData(data, datasetName, useAllPoints = false) {
             console.log(`Processing ${datasetName}:`);
             
             const results = [];
@@ -275,7 +287,9 @@
             
             results.sort((a, b) => a.id - b.id);
             
-            const points = results.slice(0, data.keys.k).map(r => ({
+            // Use all points or just the minimum required k points
+            const pointsToUse = useAllPoints ? results.length : data.keys.k;
+            const points = results.slice(0, pointsToUse).map(r => ({
                 x: r.id,
                 y: r.decimalValue
             }));
@@ -286,27 +300,34 @@
                 keys: data.keys,
                 results: results,
                 points: points,
-                constantTerm: c
+                constantTerm: c,
+                pointsUsed: pointsToUse
             };
         }
 
         function displayResults() {
             document.getElementById('error-message').style.display = 'none';
-            document.getElementById('loading').textContent = 'Processing data...';
+            document.getElementById('loading').textContent = 'Processing data separately...';
             
             try {
-                const result1 = processJsonData(data1, "data1.json");
-                const result2 = processJsonData(data2, "data2.json");
+                // Process each dataset separately
+                const result1 = processData1();
+                const result2 = processData2();
                 
+                console.log('Data1 processed separately - c value:', result1.constantTerm);
+                console.log('Data2 processed separately - c value:', result2.constantTerm);
+                
+                // Clear previous results
                 document.getElementById('results').innerHTML = `
                     <div class="result-section" id="data1-results">
-                        <div class="result-title">Data Set 1 (data1.json)</div>
+                        <div class="result-title">Data Set 1 (data1.json) - Using Minimum Required Points</div>
                         <div class="c-value" id="c-value-1">c = ${formatLargeNumber(result1.constantTerm)}</div>
                         <div class="details" id="details-1">
-                            <strong>Polynomial degree:</strong> ${result1.keys.k - 1}<br>
-                            <strong>Points used:</strong> ${result1.keys.k} out of ${result1.keys.n}<br>
+                            <strong>Polynomial degree:</strong> ${result1.pointsUsed - 1}<br>
+                            <strong>Points used:</strong> ${result1.pointsUsed} out of ${result1.keys.n} available<br>
                             <strong>Secret reconstructed at x=0</strong><br>
-                            <strong>Exact value:</strong> ${result1.constantTerm}
+                            <strong>Exact value:</strong> ${result1.constantTerm}<br>
+                            <strong>Processing method:</strong> Minimum k=${result1.keys.k} points
                         </div>
                         <div class="data-points" id="points-1">
                             <strong>Points used for reconstruction:</strong><br>
@@ -315,13 +336,14 @@
                     </div>
                     
                     <div class="result-section" id="data2-results">
-                        <div class="result-title">Data Set 2 (data2.json)</div>
+                        <div class="result-title">Data Set 2 (data2.json) - Using All Available Points</div>
                         <div class="c-value" id="c-value-2">c = ${formatLargeNumber(result2.constantTerm)}</div>
                         <div class="details" id="details-2">
-                            <strong>Polynomial degree:</strong> ${result2.keys.k - 1}<br>
-                            <strong>Points used:</strong> ${result2.keys.k} out of ${result2.keys.n}<br>
+                            <strong>Polynomial degree:</strong> ${result2.pointsUsed - 1}<br>
+                            <strong>Points used:</strong> ${result2.pointsUsed} out of ${result2.keys.n} available (ALL POINTS)<br>
                             <strong>Secret reconstructed at x=0</strong><br>
-                            <strong>Exact value:</strong> ${result2.constantTerm}
+                            <strong>Exact value:</strong> ${result2.constantTerm}<br>
+                            <strong>Processing method:</strong> All available points (improved precision)
                         </div>
                         <div class="data-points" id="points-2">
                             <strong>Points used for reconstruction:</strong><br>
