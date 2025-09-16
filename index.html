@@ -92,7 +92,7 @@
         <h1>Polynomial Secret Reconstruction</h1>
         <p class="loading" id="loading">Loading and processing data...</p>
         
-        <button onclick="processData()" id="processBtn">Reload Data</button>
+        <button onclick="processData()" id="processBtn">Process Data</button>
         
         <div id="error-message" class="error" style="display: none;"></div>
         
@@ -114,40 +114,76 @@
     </div>
 
     <script>
-        let data1 = null;
-        let data2 = null;
-        async function loadJsonFiles() {
-            try {
-                const [response1, response2] = await Promise.all([
-                    fetch('./data1.json'),
-                    fetch('./data2.json')
-                ]);
-                
-                if (!response1.ok) {
-                    throw new Error(`Failed to load data1.json: ${response1.statusText}`);
-                }
-                if (!response2.ok) {
-                    throw new Error(`Failed to load data2.json: ${response2.statusText}`);
-                }
-                
-                data1 = await response1.json();
-                data2 = await response2.json();
-                
-                console.log('JSON files loaded successfully');
-                return true;
-            } catch (error) {
-                console.error('Error loading JSON files:', error);
-                showError(`Error loading JSON files: ${error.message}`);
-                return false;
+        // Embedded JSON data (for standalone operation)
+        const data1 = {
+            "keys": {
+                "n": 4,
+                "k": 3
+            },
+            "1": {
+                "base": "10",
+                "value": "4"
+            },
+            "2": {
+                "base": "2",
+                "value": "111"
+            },
+            "3": {
+                "base": "10",
+                "value": "12"
+            },
+            "6": {
+                "base": "4",
+                "value": "213"
             }
-        }
+        };
 
-        function showError(message) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            document.getElementById('loading').style.display = 'none';
-        }
+        const data2 = {
+            "keys": {
+                "n": 10,
+                "k": 7
+            },
+            "1": {
+                "base": "6",
+                "value": "13444211440455345511"
+            },
+            "2": {
+                "base": "15",
+                "value": "aed7015a346d635"
+            },
+            "3": {
+                "base": "15",
+                "value": "6aeeb69631c227c"
+            },
+            "4": {
+                "base": "16",
+                "value": "e1b5e05623d881f"
+            },
+            "5": {
+                "base": "8",
+                "value": "316034514573652620673"
+            },
+            "6": {
+                "base": "3",
+                "value": "2122212201122002221120200210011020220200"
+            },
+            "7": {
+                "base": "3",
+                "value": "20120221122211000100210021102001201112121"
+            },
+            "8": {
+                "base": "6",
+                "value": "20220554335330240002224253"
+            },
+            "9": {
+                "base": "12",
+                "value": "45153788322a1255483"
+            },
+            "10": {
+                "base": "7",
+                "value": "1101613130313526312514143"
+            }
+        };
 
         function baseToDecimal(value, base) {
             return parseInt(value, base);
@@ -209,17 +245,8 @@
             };
         }
 
-        async function displayResults() {
+        function displayResults() {
             document.getElementById('error-message').style.display = 'none';
-            
-            if (!data1 || !data2) {
-                document.getElementById('loading').textContent = 'Loading JSON files...';
-                const loaded = await loadJsonFiles();
-                if (!loaded) {
-                    return;
-                }
-            }
-            
             document.getElementById('loading').textContent = 'Processing data...';
             
             try {
@@ -266,21 +293,19 @@
                 
             } catch (error) {
                 console.error('Error processing data:', error);
-                showError(`Error processing data: ${error.message}`);
+                document.getElementById('loading').textContent = 'Error processing data: ' + error.message;
             }
         }
 
-        async function processData() {
-            data1 = null;
-            data2 = null;
+        function processData() {
             document.getElementById('results').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
-            await displayResults();
+            displayResults();
         }
 
         window.onload = function() {
-            setTimeout(async () => {
-                await displayResults();
+            setTimeout(() => {
+                displayResults();
             }, 500);
         };
     </script>
